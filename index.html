@@ -163,6 +163,21 @@
     .rent-period > div {
         flex: 1;
     }
+    /* Styles for PDF Export */
+    .exporting button {
+        display: none !important;
+    }
+    .print-text {
+        display: inline-block;
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        box-sizing: border-box;
+        background-color: #f8f9fa;
+        min-height: 40px;
+        text-align: left;
+    }
   </style>
 </head>
 <body>
@@ -458,8 +473,17 @@ function calculateROI() {
   const rentCollected = calculateTotalRentCollected();
   const maintenancePaid = inputs.qMaint * Math.ceil(monthsSincePossession / 3);
   
-  // 6. CURRENT PROPERTY VALUE
-  const currentPrice = inputs.salePrice > 0 ? inputs.salePrice : allIncPrice * Math.pow(1 + inputs.appRate, yearsHeld);
+  // 6. CURRENT PROPERTY VALUE (FIXED LOGIC)
+  let currentPrice;
+  if (inputs.salePrice > 0) {
+      currentPrice = inputs.salePrice;
+  } 
+  else if (yearsHeld < (1 / 12)) { 
+      currentPrice = allIncPrice;
+  } 
+  else {
+      currentPrice = allIncPrice * Math.pow(1 + inputs.appRate, yearsHeld);
+  }
 
   // 7. FINAL ROI METRICS (CORRECTED LOGIC)
   const totalInflow = currentPrice + rentCollected;
@@ -490,6 +514,7 @@ function calculateROI() {
   absROIEl.className = absoluteROI >= 0 ? 'positive' : 'negative';
 
   const annROIEl = document.getElementById("annualizedROI");
+  // **** ERROR FIX: Use the 'annualizedROI' variable, not the HTML element 'annROIEl' ****
   annROIEl.innerText = `${annualizedROI.toFixed(2)}%`;
   annROIEl.className = annualizedROI >= 0 ? 'positive' : 'negative';
   
@@ -574,38 +599,63 @@ function exportToPDF() {
     const exportBtn = document.getElementById('exportBtn');
     const originalBtnText = exportBtn.innerHTML;
     exportBtn.innerHTML = 'Generating...';
-    
+    exportBtn.disabled = true;
+
+    // 1. Create replacements for inputs
+    const replacements = [];
+    const inputs = content.querySelectorAll('input[type="number"], input[type="month"]');
+    inputs.forEach(input => {
+        const textSpan = document.createElement('span');
+        textSpan.className = 'print-text';
+        textSpan.textContent = input.value || ' ';
+        replacements.push({ original: input, replacement: textSpan });
+        input.parentNode.insertBefore(textSpan, input);
+        input.style.display = 'none';
+    });
+
+    // 2. Add a class to the container to hide buttons via CSS
+    content.classList.add('exporting');
+
     html2canvas(content, {
-        scale: 2, // Higher resolution
-        useCORS: true 
+        scale: 2, // Higher resolution for better quality
+        useCORS: true,
+        logging: false,
     }).then(canvas => {
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
         const ratio = canvasWidth / canvasHeight;
-        const imgWidth = pdfWidth - 20; // with margin
-        const imgHeight = imgWidth / ratio;
+        const imgHeight = pdfWidth / ratio;
         let heightLeft = imgHeight;
-        let position = 10; // top margin
+        let position = 0;
 
-        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-        heightLeft -= (pdfHeight - 20);
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdf.internal.pageSize.getHeight();
 
         while (heightLeft > 0) {
-            position = - (imgHeight - heightLeft) + 10;
+            position = -heightLeft;
             pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-            heightLeft -= (pdfHeight - 20);
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdf.internal.pageSize.getHeight();
         }
         
         pdf.save('property-roi-summary.pdf');
-        exportBtn.innerHTML = originalBtnText;
+
     }).catch(err => {
         console.error("Error generating PDF:", err);
         exportBtn.innerHTML = 'Failed! Try Again.';
+    }).finally(() => {
+        // 3. Restore original inputs and remove temporary spans
+        content.classList.remove('exporting');
+        replacements.forEach(item => {
+            item.original.style.display = '';
+            item.replacement.remove();
+        });
+
+        exportBtn.innerHTML = originalBtnText;
+        exportBtn.disabled = false;
     });
 }
 
