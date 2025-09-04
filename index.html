@@ -296,7 +296,7 @@
     
     <div class="form-grid" style="margin-top: 20px;">
       <label for="quarterlyMaintenance">Quarterly Maintenance</label>
-      <input type="number" id="quarterlyMaintenance" value="" min="0" placeholder="e.g., 12000">
+      <input type="number" id="quarterlyMaintenance" value="" min="0" placeholder="e.g., 10000">
     </div>
   </div>
 
@@ -424,7 +424,7 @@ function addRentPeriod(start = '', end = '', rent = '') {
         </div>
         <div>
             <label style="font-size:12px; font-weight:normal;">Monthly Rent</label>
-            <input type="number" class="rent-amount" placeholder="e.g., 18000" value="${rent}">
+            <input type="number" class="rent-amount" placeholder="e.g., 15000" value="${rent}">
         </div>
         <button class="remove-btn" onclick="this.parentElement.remove(); calculateROI();">X</button>
     `;
