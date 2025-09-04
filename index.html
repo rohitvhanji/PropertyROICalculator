@@ -189,7 +189,7 @@
     <h2>1. Purchase Costs</h2>
     <div class="form-grid">
         <label for="agreementValue">Agreement Value</label>
-        <input type="number" id="agreementValue" value="3600000" min="0">
+        <input type="number" id="agreementValue" value="" min="0" placeholder="e.g., 5000000">
         
         <label for="stampDutyPercent">Stamp Duty (%)</label>
         <input type="number" id="stampDutyPercent" value="7" min="0" step="0.1">
@@ -204,7 +204,7 @@
         <div class="calculated-value" id="gstValue"></div>
 
         <label for="registrationCharges">Registration Charges (Fixed)</label>
-        <input type="number" id="registrationCharges" value="30000" min="0">
+        <input type="number" id="registrationCharges" value="" min="0" placeholder="e.g., 30000">
     </div>
     <div class="summary-box" style="margin-top: 15px;">
         <p><b>All-Inclusive Price: <span id="allInclusivePrice" class="highlight"></span></b></p>
@@ -219,13 +219,16 @@
         <input type="number" id="ltvPercent" value="80" min="0" max="100">
 
         <label for="loanAmount">Loan Amount</label>
-        <input type="number" id="loanAmount" value="2880000" min="0">
+        <input type="number" id="loanAmount" value="" min="0" placeholder="Calculated from LTV">
 
         <label for="interestRate">Interest Rate (% p.a.)</label>
         <input type="number" id="interestRate" value="8.5" min="0" step="0.01">
 
         <label for="tenure">Tenure (months)</label>
         <input type="number" id="tenure" value="240" min="0">
+        
+        <label for="loanClosureDate">Loan Closure Date (optional)</label>
+        <input type="month" id="loanClosureDate">
     </div>
     <div class="summary-box" style="margin-top: 15px;">
          <p><b>Required Downpayment: <span id="downpaymentValue" class="highlight"></span></b></p>
@@ -240,10 +243,10 @@
     <h2>3. Investment Timeline</h2>
     <div class="form-grid">
       <label for="bookingDate">Booking Date</label>
-      <input type="month" id="bookingDate" value="2018-01">
+      <input type="month" id="bookingDate" value="">
 
-      <label for="possessionDate">Possession Date (Rent Starts)</label>
-      <input type="month" id="possessionDate" value="2021-01">
+      <label for="possessionDate">Possession Date</label>
+      <input type="month" id="possessionDate" value="">
     </div>
   </div>
   
@@ -258,7 +261,7 @@
     
     <div class="form-grid" style="margin-top: 20px;">
       <label for="quarterlyMaintenance">Quarterly Maintenance</label>
-      <input type="number" id="quarterlyMaintenance" value="12000" min="0">
+      <input type="number" id="quarterlyMaintenance" value="" min="0" placeholder="e.g., 12000">
     </div>
   </div>
 
@@ -281,22 +284,26 @@
     <h2>ROI Analysis (As of Today)</h2>
     <div class="row">
         <div class="col summary-box">
-            <h3>Total Inflow 💰</h3>
+            <h3>Income 💰</h3>
             <p>Est. Current Property Value: <b id="currentPrice"></b></p>
             <p>Total Rent Collected: <b id="rentCollected"></b></p>
-            <p><b>Total Inflow:</b> <b id="totalInflow"></b></p>
+            <hr style="border-top: 1px solid #ddd; margin: 10px 0;">
+            <p><b>Total Income: <span id="totalIncomeValue"></span></b></p>
         </div>
         <div class="col summary-box">
-            <h3>Total Outflow 💸</h3>
+            <h3>Expenses 💸</h3>
             <p>All-Inclusive Purchase Price: <b id="purchasePriceOutflow"></b></p>
-            <p>Total Interest Paid: <b id="interestPaid"></b></p>
+            <p>Pre-Possession Interest: <b id="preEmiInterestPaid"></b></p>
+            <p>Post-Possession Interest: <b id="amortizedInterestPaid"></b></p>
+            <p><b>Total Interest Paid:</b> <b id="interestPaid"></b></p>
             <p>Total Maintenance Paid: <b id="maintenancePaid"></b></p>
-            <p><b>Total Outflow:</b> <b id="totalOutflow"></b></p>
+            <hr style="border-top: 1px solid #ddd; margin: 10px 0;">
+            <p><b>Total Expenses: <span id="totalExpensesValue"></span></b></p>
         </div>
     </div>
     <div class="summary-box" style="margin-top:20px; text-align:center;">
         <p><b>Net Profit / Loss (If Sold Today): <span id="netResult"></span></b></p>
-        <p class="formula">(Property Value + Rent) - (Purchase Price + Interest + Maintenance)</p>
+        <p class="formula">(Total Income - Total Expenses)</p>
         <p><b>Absolute ROI (Profit / Your Capital): <span id="absoluteROI"></span></b></p>
         <p><b>Annualized ROI (CAGR): <span id="annualizedROI"></span></b></p>
     </div>
@@ -339,13 +346,16 @@ function fmt(num) {
 }
 
 function getMonthsDifference(d1, d2) {
-    if (d1 > d2) return 0;
+    if (!d1 || !d2 || d1 > d2 || isNaN(d1.getTime()) || isNaN(d2.getTime())) return 0;
+    
     let months;
     months = (d2.getFullYear() - d1.getFullYear()) * 12;
     months -= d1.getMonth();
     months += d2.getMonth();
-    return months <= 0 ? 0 : months + 1; // +1 to be inclusive
+    
+    return months < 0 ? 0 : months + 1;
 }
+
 
 // --- DYNAMIC RENT PERIODS ---
 function addRentPeriod(start = '', end = '', rent = '') {
@@ -372,7 +382,8 @@ function addRentPeriod(start = '', end = '', rent = '') {
 
     // Add event listeners to new inputs
     periodDiv.querySelectorAll('input').forEach(input => {
-        input.addEventListener('input', calculateROI);
+        const eventType = input.type === 'month' ? 'change' : 'input';
+        input.addEventListener(eventType, calculateROI);
     });
 }
 
@@ -382,7 +393,7 @@ function calculateTotalRentCollected() {
     const today = new Date();
     let totalRent = 0;
 
-    if (isNaN(possessionDate)) return 0;
+    if (isNaN(possessionDate.getTime())) return 0;
 
     periods.forEach(period => {
         const startDateInput = period.querySelector('.rent-start').value;
@@ -393,6 +404,8 @@ function calculateTotalRentCollected() {
 
         let periodStart = new Date(startDateInput + "-02");
         let periodEnd = endDateInput ? new Date(endDateInput + "-02") : today;
+        
+        if (isNaN(periodStart.getTime())) return;
 
         // Clamp the calculation window between possession date and today
         const effectiveStart = new Date(Math.max(possessionDate, periodStart));
@@ -418,6 +431,8 @@ function calculateROI() {
   document.getElementById('stampDutyValue').innerText = fmt(stampValue);
   document.getElementById('gstValue').innerText = fmt(gstValue);
 
+  const loanClosureDateStr = document.getElementById("loanClosureDate").value;
+
   const inputs = {
     agreement: agreement,
     stamp: stampValue,
@@ -428,6 +443,7 @@ function calculateROI() {
     tenure: parseInt(document.getElementById("tenure").value) || 0,
     bookingDate: new Date(document.getElementById("bookingDate").value + "-02"),
     possessionDate: new Date(document.getElementById("possessionDate").value + "-02"),
+    loanClosureDate: loanClosureDateStr ? new Date(loanClosureDateStr + "-02") : null,
     qMaint: parseFloat(document.getElementById("quarterlyMaintenance").value) || 0,
     salePrice: parseFloat(document.getElementById("salePrice").value) || 0,
     appRate: parseFloat(document.getElementById("appRate").value) / 100 || 0,
@@ -440,40 +456,49 @@ function calculateROI() {
   const downpayment = allIncPrice - inputs.loanAmt;
   document.getElementById("downpaymentValue").innerText = fmt(downpayment);
   
-  const totalInitialCapital = downpayment; // This is the user's actual cash investment
+  const totalInitialCapital = downpayment;
   const monthlyRate = inputs.ratePA / 100 / 12;
   const today = new Date();
   
   // 3. TIME-BASED CALCULATIONS
-  let monthsSincePossession = 0;
-  if (!isNaN(inputs.possessionDate) && today > inputs.possessionDate) {
-      monthsSincePossession = Math.floor((today - inputs.possessionDate) / (1000 * 60 * 60 * 24 * 30.4375));
-  }
-  
   let yearsHeld = 0;
-  if (!isNaN(inputs.bookingDate) && today > inputs.bookingDate) {
+  if (!isNaN(inputs.bookingDate.getTime()) && today > inputs.bookingDate) {
       yearsHeld = (today - inputs.bookingDate) / (1000 * 60 * 60 * 24 * 365.25);
   }
+  
+  // --- CORRECTED INTEREST LOGIC ---
+  const interestEndDate = (inputs.loanClosureDate && inputs.loanClosureDate < today) ? inputs.loanClosureDate : today;
+
+  const preEmiEndDate = (inputs.loanClosureDate && inputs.loanClosureDate < inputs.possessionDate) ? inputs.loanClosureDate : inputs.possessionDate;
+  const preEmiMonths = getMonthsDifference(inputs.bookingDate, preEmiEndDate);
+  const preEmiInterest = inputs.loanAmt * monthlyRate * (preEmiMonths > 0 ? preEmiMonths - 1 : 0);
+  
+  const emiStartDate = inputs.possessionDate;
+  const monthsForEmi = getMonthsDifference(emiStartDate, interestEndDate);
+  
+  const monthsForMaintenance = getMonthsDifference(inputs.possessionDate, today);
 
   // 4. AMORTIZATION (INTEREST & PRINCIPAL PAID)
   const emi = inputs.loanAmt > 0 && monthlyRate > 0 && inputs.tenure > 0 ? (inputs.loanAmt * monthlyRate * Math.pow(1 + monthlyRate, inputs.tenure)) / (Math.pow(1 + monthlyRate, inputs.tenure) - 1) : 0;
   document.getElementById("monthlyEMIValue").innerText = fmt(emi);
   
   let balance = inputs.loanAmt;
-  let totalInterest = 0;
-  let monthsPaid = Math.min(monthsSincePossession, inputs.tenure);
+  let amortizedInterest = 0;
+  let monthsPaid = Math.min(monthsForEmi, inputs.tenure);
 
   for (let m = 0; m < monthsPaid; m++) {
     let interest = balance * monthlyRate;
     balance -= (emi - interest);
-    totalInterest += interest;
+    amortizedInterest += interest;
   }
+  
+  const totalInterest = preEmiInterest + amortizedInterest;
 
   // 5. INCOME & EXPENSES TO DATE
   const rentCollected = calculateTotalRentCollected();
-  const maintenancePaid = inputs.qMaint * Math.ceil(monthsSincePossession / 3);
+  const maintenancePaid = inputs.qMaint * Math.ceil(monthsForMaintenance / 3);
   
-  // 6. CURRENT PROPERTY VALUE (FIXED LOGIC)
+  // 6. CURRENT PROPERTY VALUE
   let currentPrice;
   if (inputs.salePrice > 0) {
       currentPrice = inputs.salePrice;
@@ -485,7 +510,7 @@ function calculateROI() {
       currentPrice = allIncPrice * Math.pow(1 + inputs.appRate, yearsHeld);
   }
 
-  // 7. FINAL ROI METRICS (CORRECTED LOGIC)
+  // 7. FINAL ROI METRICS
   const totalInflow = currentPrice + rentCollected;
   const totalOutflow = allIncPrice + totalInterest + maintenancePaid;
   const netProfit = totalInflow - totalOutflow;
@@ -498,12 +523,14 @@ function calculateROI() {
   // 8. UPDATE THE UI
   document.getElementById("currentPrice").innerText = fmt(currentPrice);
   document.getElementById("rentCollected").innerText = fmt(rentCollected);
-  document.getElementById("totalInflow").innerText = fmt(totalInflow);
+  document.getElementById("totalIncomeValue").innerText = fmt(totalInflow);
 
   document.getElementById("purchasePriceOutflow").innerText = fmt(allIncPrice);
+  document.getElementById("preEmiInterestPaid").innerText = fmt(preEmiInterest);
+  document.getElementById("amortizedInterestPaid").innerText = fmt(amortizedInterest);
   document.getElementById("interestPaid").innerText = fmt(totalInterest);
   document.getElementById("maintenancePaid").innerText = fmt(maintenancePaid);
-  document.getElementById("totalOutflow").innerText = fmt(totalOutflow);
+  document.getElementById("totalExpensesValue").innerText = fmt(totalOutflow);
   
   const netResultEl = document.getElementById("netResult");
   netResultEl.innerText = fmt(netProfit);
@@ -514,11 +541,10 @@ function calculateROI() {
   absROIEl.className = absoluteROI >= 0 ? 'positive' : 'negative';
 
   const annROIEl = document.getElementById("annualizedROI");
-  // **** ERROR FIX: Use the 'annualizedROI' variable, not the HTML element 'annROIEl' ****
   annROIEl.innerText = `${annualizedROI.toFixed(2)}%`;
   annROIEl.className = annualizedROI >= 0 ? 'positive' : 'negative';
   
-  return { ...inputs, allIncPrice, yearsHeld, monthsSincePossession, totalInitialCapital, currentPrice, emi, currentBalance: balance, cumulativeRent: rentCollected, cumulativeInterest: totalInterest, cumulativeMaint: maintenancePaid };
+  return { ...inputs, allIncPrice, yearsHeld, monthsSincePossession: monthsForMaintenance, totalInitialCapital, currentPrice, emi, currentBalance: balance, cumulativeRent: rentCollected, cumulativeInterest: totalInterest, cumulativeMaint: maintenancePaid };
 }
 
 
@@ -538,7 +564,12 @@ function generateProjection() {
     let cumRent = currentData.cumulativeRent;
     let cumInt = currentData.cumulativeInterest;
     let cumMaint = currentData.cumulativeMaint;
-    let monthsRemaining = Math.max(0, currentData.tenure - currentData.monthsSincePossession);
+    let monthsRemaining = Math.max(0, currentData.tenure - getMonthsDifference(currentData.possessionDate, new Date()));
+    
+    if(currentData.loanClosureDate && currentData.loanClosureDate < new Date()){
+        monthsRemaining = 0;
+    }
+
 
     for (let y = 1; y <= horizon; y++) {
         propVal *= (1 + currentData.appRate);
@@ -565,7 +596,7 @@ function generateProjection() {
             ? (Math.pow((currentData.totalInitialCapital + totalProfitIfSold) / currentData.totalInitialCapital, 1 / totalYears) - 1) * 100 
             : 0;
 
-        html += `<tr><td>${new Date().getFullYear() + y}</td><td>${fmt(propVal)}</td><td>${fmt(loanBal)}</td><td class="${totalProfitIfSold >= 0 ? 'positive' : 'negative'}">${fmt(totalProfitIfSold)}</td><td class="${annualizedROI >= 0 ? 'positive' : 'negative'}">${annualizedROI.toFixed(2)}%</td></tr>`;
+        html += `<tr><td>${new Date().getFullYear() + y}</td><td>${fmt(propVal)}</td><td>${fmt(loanBal < 0 ? 0 : loanBal)}</td><td class="${totalProfitIfSold >= 0 ? 'positive' : 'negative'}">${fmt(totalProfitIfSold)}</td><td class="${annualizedROI >= 0 ? 'positive' : 'negative'}">${annualizedROI.toFixed(2)}%</td></tr>`;
     }
 
     html += "</table>";
@@ -593,13 +624,16 @@ function syncLoanInputs(source) {
 }
 
 // --- EXPORT TO PDF ---
-function exportToPDF() {
+async function exportToPDF() {
     const { jsPDF } = window.jspdf;
     const content = document.getElementById('capture');
     const exportBtn = document.getElementById('exportBtn');
     const originalBtnText = exportBtn.innerHTML;
+    const originalTitle = content.querySelector('h1').innerHTML;
+    
     exportBtn.innerHTML = 'Generating...';
     exportBtn.disabled = true;
+    content.querySelector('h1').innerHTML = 'Property ROI Calculator Report';
 
     // 1. Create replacements for inputs
     const replacements = [];
@@ -616,66 +650,87 @@ function exportToPDF() {
     // 2. Add a class to the container to hide buttons via CSS
     content.classList.add('exporting');
 
-    html2canvas(content, {
-        scale: 2, // Higher resolution for better quality
-        useCORS: true,
-        logging: false,
-    }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
+    try {
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const pageHeight = pdf.internal.pageSize.getHeight();
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        const ratio = canvasWidth / canvasHeight;
-        const imgHeight = pdfWidth / ratio;
-        let heightLeft = imgHeight;
-        let position = 0;
+        const margin = 10;
+        let yPos = margin;
 
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdf.internal.pageSize.getHeight();
+        const renderElement = async (element) => {
+            const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
+            const imgData = canvas.toDataURL('image/png');
+            const ratio = canvas.width / canvas.height;
+            const imgHeight = (pdfWidth - margin * 2) / ratio;
 
-        while (heightLeft > 0) {
-            position = -heightLeft;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdf.internal.pageSize.getHeight();
+            if (yPos + imgHeight > pageHeight - margin) {
+                pdf.addPage();
+                yPos = margin;
+            }
+            
+            pdf.addImage(imgData, 'PNG', margin, yPos, pdfWidth - margin * 2, imgHeight);
+            yPos += imgHeight + 5; // Add gap after element
+        };
+
+        // Render title
+        await renderElement(content.querySelector('h1'));
+
+        // Render each section
+        const sections = Array.from(content.querySelectorAll('.section'));
+        for (const section of sections) {
+            // Don't render the export button section
+            if (section.contains(exportBtn)) continue;
+            await renderElement(section);
         }
         
         pdf.save('property-roi-summary.pdf');
 
-    }).catch(err => {
+    } catch (err) {
         console.error("Error generating PDF:", err);
         exportBtn.innerHTML = 'Failed! Try Again.';
-    }).finally(() => {
-        // 3. Restore original inputs and remove temporary spans
+    } finally {
+        // 3. Restore original inputs, title, and remove temporary spans
         content.classList.remove('exporting');
         replacements.forEach(item => {
             item.original.style.display = '';
             item.replacement.remove();
         });
-
+        
+        content.querySelector('h1').innerHTML = originalTitle;
         exportBtn.innerHTML = originalBtnText;
         exportBtn.disabled = false;
-    });
+    }
 }
 
 
 // --- INITIALIZE THE CALCULATOR ---
 function init() {
-  addRentPeriod('2021-01', '2023-12', '18000');
-  addRentPeriod('2024-01', '2024-12', '20000');
-  addRentPeriod('2025-01', '', '27000');
-
-  const allInputs = document.querySelectorAll('input');
-  allInputs.forEach(input => {
-    if (input.id === 'ltvPercent') {
-        input.addEventListener('input', () => syncLoanInputs('ltv'));
-    } else if (input.id === 'loanAmount') {
-        input.addEventListener('input', () => syncLoanInputs('amount'));
-    } else if (!input.classList.contains('rent-start') && !input.classList.contains('rent-end') && !input.classList.contains('rent-amount')) {
-        input.addEventListener('input', calculateROI);
-    }
+  // Use 'input' for number fields for real-time updates as user types
+  const numberInputs = [
+    'agreementValue', 'stampDutyPercent', 'gstPercent', 'registrationCharges',
+    'interestRate', 'tenure', 'quarterlyMaintenance', 'salePrice', 'appRate'
+  ];
+  numberInputs.forEach(id => {
+    document.getElementById(id)?.addEventListener('input', calculateROI);
   });
+
+  // Use 'change' for month fields, which fires after a date is selected
+  const monthInputs = ['bookingDate', 'possessionDate', 'loanClosureDate'];
+  monthInputs.forEach(id => {
+    document.getElementById(id)?.addEventListener('change', calculateROI);
+  });
+
+  // Add specific listeners for synced loan inputs
+  document.getElementById('ltvPercent').addEventListener('input', () => syncLoanInputs('ltv'));
+  document.getElementById('loanAmount').addEventListener('input', () => syncLoanInputs('amount'));
+
+  // Initial calculation on page load to sync LTV etc. if needed
+  syncLoanInputs('ltv');
   calculateROI();
 }
 
